@@ -103,6 +103,8 @@ async function loadDay(){
   const list = $("list"); if(!list) return;
   if(!jobs.length){ list.innerHTML = `<div class="card center"><div style="font-size:34px">🌤️</div><div class="muted" style="margin-top:6px">No installs assigned to you for this day.</div></div>`; return; }
   list.innerHTML = jobs.map(jobCard).join("");
+  list.querySelectorAll("[data-omw]").forEach(b=>b.onclick=()=>actOmw(b));
+  list.querySelectorAll("[data-done]").forEach(b=>b.onclick=()=>actDone(b));
 }
 function capPill(s){
   if(s==="complete") return `<span class="pill ok">✓ captured</span>`;
@@ -126,7 +128,25 @@ function jobCard(j){
       ${navUrl?`<a class="nav" href="${esc(navUrl)}" target="_blank" rel="noopener">🧭 Navigate</a>`:""}
       ${j.cps_customer?`<a class="cap" href="../cs-field/?job=${encodeURIComponent(j.hcp_job_id)}">📷 Capture old unit</a>`:""}
     </div>
+    <div class="acts">
+      <button class="nav" data-omw="${esc(j.hcp_job_id)}" ${j.omw_at?"disabled":""}>${j.omw_at?"✓ On my way sent":"🚐 On my way"}</button>
+      <button class="nav" data-done="${esc(j.hcp_job_id)}" ${j.done_at?"disabled":""}>${j.done_at?"✓ Marked done":"✅ Mark done"}</button>
+    </div>
   </div>`;
+}
+async function actOmw(b){
+  const id=b.getAttribute("data-omw"); b.disabled=true; const o=b.innerHTML; b.textContent="Texting customer…";
+  const r=await api("installer-day",{token:TOKEN,action:"on_my_way",hcp_job_id:id});
+  if(r&&r.ok){ b.textContent = r.texted?"✓ On my way sent":"✓ Noted (no customer #)"; }
+  else { b.disabled=false; b.innerHTML=o; alert("Couldn't send: "+((r&&r.error)||"error")); }
+}
+async function actDone(b){
+  const id=b.getAttribute("data-done");
+  if(!confirm("Mark this install complete?\nThe office still closes it out in Housecall for billing.")) return;
+  b.disabled=true; const o=b.innerHTML; b.textContent="Saving…";
+  const r=await api("installer-day",{token:TOKEN,action:"complete",hcp_job_id:id});
+  if(r&&r.ok){ b.textContent="✓ Marked done"; }
+  else { b.disabled=false; b.innerHTML=o; alert("Couldn't save: "+((r&&r.error)||"error")); }
 }
 
 // ---------------- BOOT ----------------
