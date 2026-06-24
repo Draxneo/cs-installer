@@ -31,6 +31,12 @@
   .acts a, .acts button{ flex:1; min-width:130px; text-align:center; text-decoration:none; padding:12px; border-radius:11px; font-size:14px; font-weight:700; cursor:pointer; border:1px solid var(--line); }
   .acts .nav{ background:var(--surface2); color:var(--text); }
   .acts .cap{ background:var(--grad); color:#06121f; border-color:transparent; }
+  .steplink{ text-decoration:underline; cursor:pointer; }
+  .step{ display:flex; align-items:center; gap:11px; padding:10px 4px; border-top:1px solid var(--line); cursor:pointer; font-size:14px; }
+  .step .box{ width:24px; height:24px; border-radius:7px; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; flex:none; font-weight:800; color:#06121f; }
+  .step.done .box{ background:var(--ok); border-color:var(--ok); }
+  .step.na{ opacity:.6; }
+  .step a{ color:var(--accent); font-size:12px; text-decoration:none; }
   .spin{ width:20px;height:20px;border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:s .8s linear infinite; display:inline-block; }
   @keyframes s{ to{ transform:rotate(360deg);} }
 </style>
@@ -105,6 +111,7 @@ async function loadDay(){
   list.innerHTML = jobs.map(jobCard).join("");
   list.querySelectorAll("[data-omw]").forEach(b=>b.onclick=()=>actOmw(b));
   list.querySelectorAll("[data-done]").forEach(b=>b.onclick=()=>actDone(b));
+  list.querySelectorAll("[data-steps]").forEach(b=>b.onclick=()=>toggleSteps(b.getAttribute("data-steps")));
 }
 function capPill(s){
   if(s==="complete") return `<span class="pill ok">✓ captured</span>`;
@@ -123,7 +130,7 @@ function jobCard(j){
         ${j.cps_customer?`<span class="pill cps">CPS</span>`:""}
       </div>
     </div>
-    <div class="muted" style="font-size:12px;margin-top:6px">Job #${esc(j.job_number||"—")} · ${j.steps_total?`${j.steps_done}/${j.steps_total} steps`:"install"} ${cap?" · "+cap:""}</div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Job #${esc(j.job_number||"—")} ${j.steps_total?`· <span class="steplink" data-steps="${esc(j.hcp_job_id)}">${j.steps_done}/${j.steps_total} checklist ▾</span>`:"· install"}${cap?" · "+cap:""}</div>
     <div class="acts">
       ${navUrl?`<a class="nav" href="${esc(navUrl)}" target="_blank" rel="noopener">🧭 Navigate</a>`:""}
       ${j.cps_customer?`<a class="cap" href="../cs-field/?job=${encodeURIComponent(j.hcp_job_id)}">📷 Capture old unit</a>`:""}
@@ -132,7 +139,37 @@ function jobCard(j){
       <button class="nav" data-omw="${esc(j.hcp_job_id)}" ${j.omw_at?"disabled":""}>${j.omw_at?"✓ On my way sent":"🚐 On my way"}</button>
       <button class="nav" data-done="${esc(j.hcp_job_id)}" ${j.done_at?"disabled":""}>${j.done_at?"✓ Marked done":"✅ Mark done"}</button>
     </div>
+    <div class="steps" id="st-${esc(j.hcp_job_id)}" style="display:none"></div>
   </div>`;
+}
+async function toggleSteps(id){
+  const box = document.getElementById("st-"+id); if(!box) return;
+  if(box.style.display!=="none"){ box.style.display="none"; return; }
+  box.style.display="block";
+  if(box.dataset.loaded){ return; }
+  box.innerHTML = `<div class="muted" style="padding:8px 0;font-size:12px">Loading checklist…</div>`;
+  const r = await api("installer-day", { token:TOKEN, action:"steps", hcp_job_id:id });
+  if(!r || !r.ok){ box.innerHTML = `<div class="muted" style="font-size:12px">Couldn't load the checklist.</div>`; return; }
+  box.dataset.loaded="1"; renderSteps(id, r.steps||[]);
+}
+function renderSteps(id, steps){
+  const box = document.getElementById("st-"+id); if(!box) return;
+  box.innerHTML = steps.map(s => {
+    const done = s.status==="done", na = s.status==="na";
+    const lnk = s.link ? `<a href="${esc(s.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">open ↗</a>` : "";
+    return `<div class="step ${done?"done":""} ${na?"na":""}" data-step="${esc(s.key)}"><div class="box">${done?"✓":(na?"–":"")}</div><div style="flex:1">${esc(s.label)}${na?' <span class="muted" style="font-size:11px">(N/A)</span>':""}</div>${lnk}</div>`;
+  }).join("");
+  box.querySelectorAll("[data-step]").forEach(row => row.addEventListener("click", () => setStep(id, row.getAttribute("data-step"), row)));
+}
+async function setStep(id, key, row){
+  const wasDone = row.classList.contains("done");
+  const status = wasDone ? "not_started" : "done";
+  row.classList.toggle("done", !wasDone); row.querySelector(".box").textContent = !wasDone ? "✓" : "";
+  const r = await api("installer-day", { token:TOKEN, action:"set_step", hcp_job_id:id, step_key:key, status });
+  if(!r || !r.ok){ row.classList.toggle("done", wasDone); row.querySelector(".box").textContent = wasDone ? "✓" : ""; alert("Couldn't save that step."); return; }
+  // bump the x/8 count in the header
+  const link = document.querySelector(`.steplink[data-steps="${id}"]`);
+  if(link){ const box=document.getElementById("st-"+id); const done=box.querySelectorAll(".step.done").length; const tot=box.querySelectorAll(".step").length; link.textContent = `${done}/${tot} checklist ▾`; }
 }
 async function actOmw(b){
   const id=b.getAttribute("data-omw"); b.disabled=true; const o=b.innerHTML; b.textContent="Texting customer…";
