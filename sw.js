@@ -1,7 +1,7 @@
 // Carnes & Sons Installer — service worker. Same mechanism as the Office Console: installable +
 // offline shell; network-first with cache:"no-store" so the field app is always current when online,
 // and it WAITS on a new version so the page can show an "Update now" banner (no silent stale code).
-var V = '1.0.0';
+var V = '1.0.1';
 var CACHE = 'csinstaller-' + V;
 var CORE = ['index.html', 'manifest.webmanifest', 'inst-icon-192.png', 'inst-icon-512.png'];
 self.addEventListener('install', function (e) {

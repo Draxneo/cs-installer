@@ -46,7 +46,7 @@
   <span>A new version of the Installer is ready.</span>
   <button class="btn" id="update-now" style="width:auto;margin:0;padding:9px 16px;background:#06121f;color:#fff">Update now</button>
 </div>
-<button id="checkupd" title="Force update" style="position:fixed;right:8px;bottom:8px;z-index:90;background:var(--surface2);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:11px;cursor:pointer">update</button>
+
 <div id="app"><div class="center"><div class="spin"></div></div></div>
 <script>
 const BASE = "https://bqsjbwwkjhrthqxgybht.supabase.co/functions/v1/";
@@ -55,6 +55,8 @@ const esc = (s) => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<
 let TOKEN = ""; try { TOKEN = localStorage.getItem("cs_token") || ""; } catch(_){}
 let NAME = ""; try { NAME = localStorage.getItem("cs_name") || ""; } catch(_){}
 let curDate = todayStr();
+const APP_VERSION = "1.0.1";  // bump in lockstep with sw.js V to push a field update
+function csForceUpdate(){ try{ if(navigator.serviceWorker){ navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister().catch(function(){});}));}).then(function(){ return window.caches?caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k).catch(function(){});}));}):null; }).then(function(){location.reload();},function(){location.reload();}); return; } }catch(_e){} location.reload(); }
 
 function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function shiftDate(s, days){ const d=new Date(s+"T12:00:00"); d.setDate(d.getDate()+days); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
@@ -96,12 +98,13 @@ function signOut(){ try{ localStorage.removeItem("cs_token"); localStorage.remov
 
 // ---------------- TODAY / DAY VIEW ----------------
 function shell(inner){
-  $("app").innerHTML = `<header><div><div class="t">My Installs</div><div class="s">${esc(NAME||"")}</div></div><button class="link" id="out">Sign out</button></header>
+  $("app").innerHTML = `<header><div><div class="t">My Installs</div><div class="s">${esc(NAME||"")}</div></div><div style="text-align:right"><button class="link" id="out">Sign out</button><div class="s" id="ver" style="cursor:pointer;margin-top:3px" title="Tap to force update"></div></div></header>
     <main>
       <div class="daynav"><button id="prev">‹</button><div class="d" id="dlabel"></div><button id="next">›</button></div>
       <div id="list">${inner||""}</div>
     </main>`;
   $("out").onclick = signOut;
+  var _v = $("ver"); if(_v){ _v.textContent = "v" + APP_VERSION + " ⟳"; _v.onclick = csForceUpdate; }
   $("dlabel").textContent = prettyDate(curDate);
   $("prev").onclick = () => { curDate = shiftDate(curDate,-1); loadDay(); };
   $("next").onclick = () => { curDate = shiftDate(curDate, 1); loadDay(); };
@@ -198,7 +201,7 @@ if(TOKEN){ loadDay(); } else { renderLogin(); }
 // Installer auto-update — same as the Office Console. New SW WAITS; banner offers Update now; the
 // bottom-right chip shows the version + forces a hard update. Polls hourly + on tab refocus.
 (function () {
-  var VERSION = "1.0.0";  // keep in lockstep with sw.js V
+  var VERSION = "1.0.1";  // keep in lockstep with sw.js V
   var vEl = document.getElementById("checkupd"); if (vEl) vEl.textContent = "v" + VERSION + " ⟳";
   function showUpd(){ var b = document.getElementById("update-banner"); if (b) b.style.display = "flex"; }
   if (!("serviceWorker" in navigator)) return;
