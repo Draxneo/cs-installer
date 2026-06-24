@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0e1525"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<title>Carnes &amp; Sons — Installer</title>
+<style>
+  :root{ --bg:#0e1525; --surface:#16203a; --surface2:#1d2a4a; --line:#27365c; --text:#e8edf7; --muted:#93a1c4; --accent:#34d3ee; --ok:#34d399; --warn:#fbbf24; --bad:#f43f5e; --grad:linear-gradient(135deg,#34d3ee,#5b8cff); }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); color:var(--text); font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:0 0 24px; }
+  header{ position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  header .t{ font-size:16px; font-weight:800; } header .s{ color:var(--muted); font-size:12px; }
+  header button.link{ background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; }
+  main{ padding:14px 16px; max-width:560px; margin:0 auto; }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; margin:0 0 12px; }
+  .muted{ color:var(--muted); } .center{ text-align:center; padding:40px 20px; } .big{ font-size:50px; }
+  input[type=tel], input[type=text]{ width:100%; padding:13px 14px; font-size:17px; border-radius:11px; border:1px solid var(--line); background:var(--bg); color:var(--text); text-align:center; letter-spacing:1px; }
+  .btn{ width:100%; padding:14px; font-size:16px; font-weight:800; border:none; border-radius:12px; background:var(--grad); color:#06121f; cursor:pointer; margin-top:10px; }
+  .btn.sec{ background:var(--surface2); color:var(--text); border:1px solid var(--line); }
+  .btn[disabled]{ opacity:.5; }
+  .daynav{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+  .daynav button{ background:var(--surface2); border:1px solid var(--line); color:var(--text); border-radius:10px; padding:9px 14px; font-size:16px; cursor:pointer; }
+  .daynav .d{ font-weight:700; text-align:center; flex:1; }
+  .pill{ font-size:11px; padding:2px 9px; border-radius:999px; background:var(--surface2); color:var(--muted); white-space:nowrap; }
+  .pill.cps{ background:rgba(52,211,238,.15); color:#7fe3f3; } .pill.ok{ background:rgba(52,211,153,.16); color:#a7f3d0; } .pill.todo{ background:rgba(251,191,36,.16); color:#fde68a; } .pill.bad{ background:rgba(244,63,94,.16); color:#fda4af; }
+  .jobtop{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .addr{ color:var(--muted); font-size:13px; margin-top:3px; }
+  .acts{ display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; }
+  .acts a, .acts button{ flex:1; min-width:130px; text-align:center; text-decoration:none; padding:12px; border-radius:11px; font-size:14px; font-weight:700; cursor:pointer; border:1px solid var(--line); }
+  .acts .nav{ background:var(--surface2); color:var(--text); }
+  .acts .cap{ background:var(--grad); color:#06121f; border-color:transparent; }
+  .spin{ width:20px;height:20px;border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; animation:s .8s linear infinite; display:inline-block; }
+  @keyframes s{ to{ transform:rotate(360deg);} }
+</style>
+</head>
+<body>
+<div id="app"><div class="center"><div class="spin"></div></div></div>
+<script>
+const BASE = "https://bqsjbwwkjhrthqxgybht.supabase.co/functions/v1/";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s==null?"":s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+let TOKEN = ""; try { TOKEN = localStorage.getItem("cs_token") || ""; } catch(_){}
+let NAME = ""; try { NAME = localStorage.getItem("cs_name") || ""; } catch(_){}
+let curDate = todayStr();
+
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function shiftDate(s, days){ const d=new Date(s+"T12:00:00"); d.setDate(d.getDate()+days); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function prettyDate(s){ const d=new Date(s+"T12:00:00"); const t=todayStr(); const lbl=s===t?"Today":(s===shiftDate(t,1)?"Tomorrow":(s===shiftDate(t,-1)?"Yesterday":"")); return (lbl?lbl+" · ":"")+d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}); }
+function timeOf(iso){ if(!iso) return ""; try{ return new Date(iso).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}); }catch(_){ return ""; } }
+async function api(path, body){ const r = await fetch(BASE+path, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})}); return r.json().catch(()=>({error:"network"})); }
+
+// ---------------- LOGIN (text-a-code, reuses staff-auth) ----------------
+let LOGIN_PHONE = "";
+function renderLogin(){
+  $("app").innerHTML = `<main><div style="text-align:center;margin:30px 0 18px"><div style="font-size:40px">🛠️</div><div style="font-weight:800;font-size:20px;margin-top:6px">Installer Sign-in</div><div class="muted" style="font-size:13px">You'll stay signed in — just open the app each day.</div></div>
+    <div class="card"><div class="muted" style="font-size:12px;margin-bottom:4px">Your mobile number</div>
+      <input type="tel" id="ph" inputmode="tel" placeholder="(210) 555-1234"/>
+      <button class="btn" id="send">Text me a code</button>
+      <div id="login-msg" class="muted" style="font-size:12px;text-align:center;margin-top:8px"></div></div></main>`;
+  $("send").onclick = async () => {
+    const p = $("ph").value.replace(/\D/g,""); if(p.length<10){ $("login-msg").textContent="Enter a 10-digit number."; return; }
+    LOGIN_PHONE = p; $("send").disabled=true; $("send").textContent="Sending…";
+    const r = await api("staff-auth-request", { phone: p });
+    if(r && (r.ok || r.sent || r.success)){ renderCode(); } else { $("send").disabled=false; $("send").textContent="Text me a code"; $("login-msg").textContent = (r&&r.error)||"Couldn't send a code — check the number."; }
+  };
+}
+function renderCode(){
+  $("app").innerHTML = `<main><div style="text-align:center;margin:30px 0 18px"><div style="font-size:40px">✉️</div><div style="font-weight:800;font-size:20px;margin-top:6px">Enter your code</div><div class="muted" style="font-size:13px">We texted a 6-digit code to your phone.</div></div>
+    <div class="card"><input type="text" id="code" inputmode="numeric" maxlength="6" placeholder="••••••"/>
+      <button class="btn" id="verify">Sign in</button>
+      <button class="btn sec" id="back">Use a different number</button>
+      <div id="code-msg" class="muted" style="font-size:12px;text-align:center;margin-top:8px"></div></div></main>`;
+  $("back").onclick = renderLogin;
+  $("verify").onclick = async () => {
+    const c = $("code").value.replace(/\D/g,""); if(c.length<4){ $("code-msg").textContent="Enter the code."; return; }
+    $("verify").disabled=true; $("verify").textContent="Signing in…";
+    const r = await api("extension-otp-verify", { phone: LOGIN_PHONE, code: c });
+    if(r && r.token){ TOKEN=r.token; NAME=r.employee_name||""; try{ localStorage.setItem("cs_token",TOKEN); localStorage.setItem("cs_name",NAME); }catch(_){}; curDate=todayStr(); loadDay(); }
+    else { $("verify").disabled=false; $("verify").textContent="Sign in"; $("code-msg").textContent=(r&&r.error)||"That code didn't work."; }
+  };
+}
+function signOut(){ try{ localStorage.removeItem("cs_token"); localStorage.removeItem("cs_name"); }catch(_){}; TOKEN=""; renderLogin(); }
+
+// ---------------- TODAY / DAY VIEW ----------------
+function shell(inner){
+  $("app").innerHTML = `<header><div><div class="t">My Installs</div><div class="s">${esc(NAME||"")}</div></div><button class="link" id="out">Sign out</button></header>
+    <main>
+      <div class="daynav"><button id="prev">‹</button><div class="d" id="dlabel"></div><button id="next">›</button></div>
+      <div id="list">${inner||""}</div>
+    </main>`;
+  $("out").onclick = signOut;
+  $("dlabel").textContent = prettyDate(curDate);
+  $("prev").onclick = () => { curDate = shiftDate(curDate,-1); loadDay(); };
+  $("next").onclick = () => { curDate = shiftDate(curDate, 1); loadDay(); };
+}
+async function loadDay(){
+  shell(`<div class="center"><div class="spin"></div></div>`);
+  const r = await api("installer-day", { token: TOKEN, action: "today", date: curDate });
+  if(r && (r.error==="Not authorized" || r.error==="Not signed in")){ signOut(); return; }
+  const jobs = (r && r.jobs) || [];
+  const list = $("list"); if(!list) return;
+  if(!jobs.length){ list.innerHTML = `<div class="card center"><div style="font-size:34px">🌤️</div><div class="muted" style="margin-top:6px">No installs assigned to you for this day.</div></div>`; return; }
+  list.innerHTML = jobs.map(jobCard).join("");
+}
+function capPill(s){
+  if(s==="complete") return `<span class="pill ok">✓ captured</span>`;
+  if(s==="incomplete") return `<span class="pill bad">capture incomplete</span>`;
+  if(s==="opened"||s==="sent") return `<span class="pill todo">capture started</span>`;
+  return `<span class="pill todo">needs capture</span>`;
+}
+function jobCard(j){
+  const navUrl = j.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(j.address)}` : "";
+  const cap = j.cps_customer ? capPill(j.capture_status) : "";
+  return `<div class="card">
+    <div class="jobtop">
+      <div><div style="font-weight:700">${esc(j.customer_name||"(customer)")}</div><div class="addr">${esc(j.address||"")}</div></div>
+      <div style="text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        <span class="pill">${esc(timeOf(j.scheduled_start)||("Job #"+(j.job_number||"")))}</span>
+        ${j.cps_customer?`<span class="pill cps">CPS</span>`:""}
+      </div>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:6px">Job #${esc(j.job_number||"—")} · ${j.steps_total?`${j.steps_done}/${j.steps_total} steps`:"install"} ${cap?" · "+cap:""}</div>
+    <div class="acts">
+      ${navUrl?`<a class="nav" href="${esc(navUrl)}" target="_blank" rel="noopener">🧭 Navigate</a>`:""}
+      ${j.cps_customer?`<a class="cap" href="../cs-field/?job=${encodeURIComponent(j.hcp_job_id)}">📷 Capture old unit</a>`:""}
+    </div>
+  </div>`;
+}
+
+// ---------------- BOOT ----------------
+if(TOKEN){ loadDay(); } else { renderLogin(); }
+</script>
+</body>
+</html>
